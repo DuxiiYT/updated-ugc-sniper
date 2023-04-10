@@ -13,7 +13,7 @@ from itertools import cycle
 
 # checking for update
 print(fore.RED + "Checking for potential updates...")
-gitcode = r.get("https://raw.githubusercontent.com/DuxiiYT/fixed-ugc-sniper/main/main.py").text
+gitcode = r.get("https://raw.githubusercontent.com/DuxiiYT/updated-ugc-sniper/main/main.py").text
 with open("main.py", "r") as f:
     if f.read() != gitcode:
         print(fore.RED + "Found update, updating to newest version..")
