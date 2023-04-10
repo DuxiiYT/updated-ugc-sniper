@@ -105,7 +105,7 @@ def buy(json, itemid, productid):
 # Get collectible and product id for all the limiteds.
 Thread(target=get_x_token).start()
 
-print("Starting Sniper")
+print("Starting Sniper | Made by Jeldo#9587 | 625695250773573652")
 while x_token == "":
     time.sleep(0.01)
 
