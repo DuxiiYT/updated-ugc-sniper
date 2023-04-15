@@ -1,158 +1,115 @@
-# some imports
-import requests as r
-import os
-import uuid
+import requests
 import time
-import datetime
-import colorama
+import random
+import os
 
-# more imports
-from colorama import Fore as fore
-from threading import Thread
-from itertools import cycle
+start_time = time.time()
 
-# checking for update
-print(fore.RED + "Checking for potential updates...")
-gitcode = r.get("https://raw.githubusercontent.com/DuxiiYT/updated-ugc-sniper/main/main.py").text
-with open("main.py", "r") as f:
-    if f.read() != gitcode:
-        print(fore.RED + "Found update, updating to newest version..")
-        with open("main.py", "w") as f:
-            f.write(gitcode)
-            print(fore.RED + "Successfully updated, close and open main.py")
-            exit(0)
+cookie = "_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_DA23E587CA51099F9E50D68FD09C1F25564EDE208C9ACE11EFF4B95AE6CDD9047B80A535A5B4F3547C1DD2366D0FE439C1243CE11E66BE20F50C1043D1C61821E2540EDEF19618C47C9FD1E85163ECB9AC783834CC383A63B0B509019B1B84184DE2417AC07642AB2C97419AA2DD2D962CD3C6D9188FAB6791C0451E49E873FF42EF6366B346598E3BAA64AA1020E2E299D77DF671880907D57029C859058B0BAB95146BD6C289388DB5729D436BC061DCDD3AB37DA21399E6DE794DC232CB670A1ED030CCC75D4AB72AB44F090C7FF204BC43229BE228A966AD58FFBDD947E637ACDC818535245A21CCC0E64341DE79B7F69877E9EBC3E50F24E449E296D47CE022F140A53D9DD690383CDC13012EC81C84A5FEA3C799257E165EACA1FE164B6E48E5EF148D735A32FC0E2C16E8B884AD13D53D8790AE1FE3811024ADF4DA396C7076FCFF38486001D9B99ED34E0D382DD21BD63C03541EDEA1919F46FEE3FAB0ED6E1F"  # your roblox cookie here
+headers = {
+    "Cookie": cookie,
+    "X-CSRF-TOKEN": "",
+    "Content-Type": "application/json"
+}
 
-with open("cookie.txt", "r") as f:
-    cookie = f.read()
+def check_free_limiteds():
+    url = "https://catalog.roblox.com/v2/search/items/details?Category=1&salesTypeFilter=2&SortType=3&Subcategory=2&Limit=10&MaxPrice=0"
+    response = requests.get(url, headers=headers)
 
-with open("limiteds.txt", "r") as f:
-    limiteds = f.read().replace(" ", "").split(",")
+    if response.status_code == 200:
+        data = response.json()
+        free_limiteds = []
 
-with open("proxies.txt", "r") as f:
-    proxies = f.read().splitlines()
-    proxy_pool = cycle(proxies)
-    proxy = next(proxy_pool)
+        for item in data["data"]:
+            if item["price"] == 0 and item["remaining"] > 0:
+                free_limiteds.append(item)
 
-urowncooldown = input(fore.YELLOW + "Cooldown for all limiteds: ")
+        return free_limiteds
 
-user_id = r.get("https://users.roblox.com/v1/users/authenticated", cookies={".ROBLOSECURITY": cookie}, proxies={'http':"http://"+proxy}).json()["id"]
-x_token = ""
-def get_x_token():
-    global x_token
+    else:
+        print(f"Ratelimited. Status code: {response.status_code}")
+        return None
 
-    x_token = r.post("https://auth.roblox.com/v2/logout",
-                     cookies={".ROBLOSECURITY": cookie}, proxies={'http':"http://"+proxy}).headers["x-csrf-token"]
+def get_random_proxy():
+    with open("proxies.txt") as f:
+        proxies = f.readlines()
+    return {"http": "http://" + random.choice(proxies).strip(),
+            "https": "https://" + random.choice(proxies).strip()}
 
-    while 1:
-        # Gets the x_token every 4 minutes.
-        x_token = r.post("https://auth.roblox.com/v2/logout",
-                         cookies={".ROBLOSECURITY": cookie}, proxies={'http':"http://"+proxy}).headers["x-csrf-token"]
-        time.sleep(248)
+def buy_free_limited():
+    free_limiteds = check_free_limiteds()
 
+    if free_limiteds:
+        limited_to_buy = free_limiteds[0]
+        asset_id = limited_to_buy["id"]
+        url = f"https://economy.roblox.com/v1/purchases/products/{asset_id}"
+        start_time = time.time()  # initialize start time before the loop
 
-def buy(json, itemid, productid):
-    print(fore.GREEN + "BUYING LIMITED: " + productid)
-    data = {
-        "collectibleItemId": itemid,
-        "expectedCurrency": 1,
-        "expectedPrice": 0,
-        "expectedPurchaserId": user_id,
-        "expectedPurchaserType": "User",
-        "expectedSellerId": json["creatorTargetId"],
-        "expectedSellerType": "User",
-        "idempotencyKey": "random uuid4 string that will be your key or smthn",
-        "collectibleProductId": productid
-    }
-
-    while 1:
-        data["idempotencyKey"] = str(uuid.uuid4())
-        bought = r.post(f"https://apis.roblox.com/marketplace-sales/v1/item/{itemid}/purchase-item", json=data,
-            headers={"x-csrf-token": x_token}, cookies={".ROBLOSECURITY": cookie}, proxies={'http':"http://"+proxy})
-
-        if bought.reason == "Too Many Requests":
-            print(fore.YELLOW + "Ran into a ratelimit, switching proxy and trying again.")
-            proxy = next(proxy_pool) # switch proxy
-            print("Proxy: " + proxy)
-            time.sleep(0.5)
-            continue
-
-        try:
-            bought = bought.json()
-        except:
-            print(bought.reason)
-            print(fore.YELLOW +"Json decoder error whilst trying to buy item.")
-            continue
-
-        if not bought["purchased"]:
-            print(fore.RED + f"Failed buying the limited, trying again.. Info: {bought} - {data}")
-        else:
-            print(fore.GREEN + f"Successfully bought the limited! Info: {bought} - {data}")
-
-        info = r.post("https://catalog.roblox.com/v1/catalog/items/details",
-                      json={"items": [{"itemType": "Asset", "id": int(limited)}]},
-                      headers={"x-csrf-token": x_token}, cookies={".ROBLOSECURITY": cookie}, proxies={'http':"http://"+proxy})
-        try:
-            left = info.json()["data"][0]["unitsAvailableForConsumption"]
-        except:
-            print(fore.RED + f"Failed getting stock. Full log: {info.text} - {info.reason}")
-            left = 0
-
-        if left == 0:
-            print(fore.RED + "Couldn't buy the limited in time. Better luck next time.")
-            return
-
-
-# Get collectible and product id for all the limiteds.
-Thread(target=get_x_token).start()
-
-print("Starting Sniper | Made by Jeldo#9587 | 625695250773573652")
-while x_token == "":
-    time.sleep(0.01)
-
-# https://apis.roblox.com/marketplace-items/v1/items/details
-# https://catalog.roblox.com/v1/catalog/items/details
-
-if urowncooldown.isdigit():
-    cooldown = int(urowncooldown)/len(limiteds)
-else:
-    print("not a digit, try again.")
-while 1:
-    start = time.perf_counter()
-
-    for limited in limiteds:
-        try:
-            info = r.post("https://catalog.roblox.com/v1/catalog/items/details",
-                           json={"items": [{"itemType": "Asset", "id": int(limited)}]},
-                           headers={"x-csrf-token": x_token}, cookies={".ROBLOSECURITY": cookie}, proxies={'http':"http://"+proxy}).json()["data"][0]
-        except KeyError:
-            print(fore.YELLOW + f"Ratelimited on proxy: {proxy} - switching proxy and trying again.")
-            proxy = next(proxy_pool) # switch proxy
-            print("New Proxy: " + proxy)
-
-            time.sleep(5)
-            continue
-
-        if info.get("priceStatus", "") != "Off Sale" and info.get("collectibleItemId") is not None:
-            productid = r.post("https://apis.roblox.com/marketplace-items/v1/items/details",
-                   json={"itemIds": [info["collectibleItemId"]]},
-                   headers={"x-csrf-token": x_token}, cookies={".ROBLOSECURITY": cookie}, proxies={'http':"http://"+proxy})
-
+        retry_count = 0
+        while retry_count < 5:
             try:
-                productid = productid.json()[0]["collectibleProductId"]
-            except:
-                print(fore.RED + f"Something went wrong whilst getting the product id Logs - {productid.text} - {productid.reason}")
+                response = requests.post(url, headers=headers, proxies=get_random_proxy())
+            except requests.exceptions.RequestException as e:
+                print(f"Failed to buy limited. Proxy error: {e}")
+                time.sleep(1)
+                retry_count += 1
                 continue
 
-            buy(info, info["collectibleItemId"], productid)
+            if response.status_code == 200:
+                print(f"Purchased {limited_to_buy['name']}.")
+                end_time = time.time()  # calculate end time inside the loop
+                execution_time = end_time - start_time
+                print("Execution time: ", execution_time, "seconds")
+                return True
+            elif response.status_code == 429:
+                print("Failed to buy limited. You may have hit the API rate limit. Switching proxy and trying again.")
+                time.sleep(1)
+                retry_count += 1
+            elif response.status_code == 403:
+                print("Failed to buy limited. You may not have enough Robux to make the purchase.")
+                break
+            elif response.status_code == 404:
+                print("Failed to buy limited. The item may no longer be available.")
+                break
+            elif response.status_code == 400:
+                print("Failed to buy limited. Invalid request.")
+                break
+            elif response.status_code == 401:
+                print("Failed to buy limited. Unauthorized. Check your cookie.")
+                break
+            elif response.status_code == 500:
+                print("Failed to buy limited. Internal server error.")
+                break
+            else:
+                print(f"Failed to buy limited. Status code: {response.status_code}")
+                time.sleep(1)
+                retry_count += 1
 
-    taken = time.perf_counter()-start
-    print(fore.GREEN + "Start: " + str(start))
-    print(fore.GREEN + "Taken: " + str(taken))
-    print(fore.GREEN + "Cooldown: " + str(cooldown))
-    if taken < cooldown:
-        time.sleep(cooldown-taken) # better wait time
+    else:
+        print("No free limiteds found.")
+        return False
 
-    ## os.system("cls")
-    print(
-          f"Time: {round(time.perf_counter()-start, 3)}\n"
-          )
+while True:
+    try:
+        success = buy_free_limited()
+        if success:
+            break
+        time.sleep(random.uniform(0.9, 0.6))
+        os.system('cls' if os.name == 'nt' else 'clear') # clear console
+
+        execution_time = time.time() - start_time
+        print("Execution time:", execution_time, "seconds")
+
+    except KeyboardInterrupt:
+        print("Program terminated by user.")
+        break
+    except:
+        print("Error occurred while attempting to buy free limited.")
+        time.sleep(random.uniform(0.7, 0.3))
+
+print("No free limited found.")
+
+execution_time = time.time() - start_time
+print("Total execution time:", execution_time, "seconds")
+
+print(f"\nExecution time: {execution_time:.2f} seconds")
